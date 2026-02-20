@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { supabase } from '../../services/supabase';
 
 const styles = StyleSheet.create({
   container: {
@@ -36,9 +37,42 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#9ca3af',
   },
+  infoText: {
+    color: '#374151',
+    marginBottom: 16,
+  },
+  signOutButton: {
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+  },
+  signOutButtonText: {
+    color: 'white',
+    fontWeight: '700',
+  },
 });
 
 export default function ProfileScreen() {
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      setEmail(user?.email ?? null);
+    };
+
+    void loadUser();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -49,7 +83,12 @@ export default function ProfileScreen() {
       <ScrollView style={styles.scrollContent}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ustawienia</Text>
-          <Text style={styles.emptyText}>Ustawienia profilu wkrótce...</Text>
+          <Text style={styles.infoText}>
+            {email ? `Zalogowano jako: ${email}` : 'Brak danych konta.'}
+          </Text>
+          <TouchableOpacity style={styles.signOutButton} onPress={() => void handleSignOut()}>
+            <Text style={styles.signOutButtonText}>Wyloguj</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>

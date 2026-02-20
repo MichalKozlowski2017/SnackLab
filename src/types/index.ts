@@ -44,6 +44,7 @@ export interface User {
 
 // Navigation types
 export type RootStackParamList = {
+  Auth: undefined;
   Home: undefined;
   RecipeDetail: { recipeId: string };
   CreateRecipe: { ingredients?: string[] };

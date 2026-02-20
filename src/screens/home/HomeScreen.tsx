@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
-import { useRecipes } from '../../hooks/useRecipes';
+import { useIngredients, useRecipes } from '../../hooks/useRecipes';
 import RecipeCard from '../../components/recipe/RecipeCard';
+import IngredientChip from '../../components/ingredient/IngredientChip';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+const INITIAL_VISIBLE_INGREDIENTS = 12;
 
 const styles = StyleSheet.create({
   container: {
@@ -55,6 +57,44 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     marginBottom: 16,
   },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  filterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  filterToggleText: {
+    color: '#4b5563',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  filterTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  clearButton: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  clearButtonText: {
+    color: '#374151',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  ingredientsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   emptyText: {
     color: '#9ca3af',
   },
@@ -63,13 +103,79 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 13,
   },
+  showMoreButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#f3f4f6',
+  },
+  showMoreText: {
+    color: '#374151',
+    fontSize: 13,
+    fontWeight: '500',
+  },
 });
 
 export default function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { data: recipes = [], isLoading, isError, refetch, isRefetching } = useRecipes();
+  const {
+    data: ingredients = [],
+    isLoading: isIngredientsLoading,
+    isError: isIngredientsError,
+  } = useIngredients();
+  const [selectedIngredientIds, setSelectedIngredientIds] = useState<string[]>([]);
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+  const [showAllIngredients, setShowAllIngredients] = useState(false);
   const [showRefreshedText, setShowRefreshedText] = useState(false);
   const hideRefreshedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const usedIngredientIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    recipes.forEach((recipe) => {
+      recipe.ingredients.forEach((ingredient) => {
+        ids.add(ingredient.id);
+      });
+    });
+
+    return ids;
+  }, [recipes]);
+
+  const filterIngredients = useMemo(() => {
+    if (usedIngredientIds.size === 0) {
+      return ingredients;
+    }
+
+    return ingredients.filter((ingredient) => usedIngredientIds.has(ingredient.id));
+  }, [ingredients, usedIngredientIds]);
+
+  const selectedIngredients = useMemo(
+    () => filterIngredients.filter((ingredient) => selectedIngredientIds.includes(ingredient.id)),
+    [filterIngredients, selectedIngredientIds]
+  );
+
+  const visibleIngredients = useMemo(() => {
+    if (showAllIngredients) {
+      return filterIngredients;
+    }
+
+    return filterIngredients.slice(0, INITIAL_VISIBLE_INGREDIENTS);
+  }, [filterIngredients, showAllIngredients]);
+
+  const filteredRecipes = useMemo(() => {
+    if (selectedIngredientIds.length === 0) {
+      return recipes;
+    }
+
+    const selectedIdsSet = new Set(selectedIngredientIds);
+
+    return recipes.filter((recipe) =>
+      recipe.ingredients.some((ingredient) => selectedIdsSet.has(ingredient.id))
+    );
+  }, [recipes, selectedIngredientIds]);
 
   useEffect(() => {
     return () => {
@@ -78,6 +184,12 @@ export default function HomeScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFiltersExpanded) {
+      setShowAllIngredients(false);
+    }
+  }, [isFiltersExpanded]);
 
   const handleRefresh = async () => {
     const result = await refetch();
@@ -93,6 +205,16 @@ export default function HomeScreen() {
         setShowRefreshedText(false);
       }, 1800);
     }
+  };
+
+  const handleIngredientToggle = (ingredientId: string) => {
+    setSelectedIngredientIds((current) => {
+      if (current.includes(ingredientId)) {
+        return current.filter((id) => id !== ingredientId);
+      }
+
+      return [...current, ingredientId];
+    });
   };
 
   return (
@@ -125,16 +247,106 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.filterToggle}
+            onPress={() => setIsFiltersExpanded((current) => !current)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.filterTitle}>
+              Filtruj po składnikach
+              {selectedIngredientIds.length > 0 ? ` (${selectedIngredientIds.length})` : ''}
+            </Text>
+            <Text style={styles.filterToggleText}>{isFiltersExpanded ? 'Zwiń ▲' : 'Rozwiń ▼'}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.filterHeader}>
+            <View />
+            {selectedIngredientIds.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => setSelectedIngredientIds([])}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clearButtonText}>Wyczyść</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {isIngredientsLoading && <Text style={styles.emptyText}>Ładowanie składników...</Text>}
+          {isIngredientsError && (
+            <Text style={styles.emptyText}>Nie udało się pobrać składników.</Text>
+          )}
+          {!isIngredientsLoading && !isIngredientsError && filterIngredients.length === 0 && (
+            <Text style={styles.emptyText}>Brak składników do filtrowania.</Text>
+          )}
+
+          {!isIngredientsLoading &&
+            !isIngredientsError &&
+            filterIngredients.length > 0 &&
+            !isFiltersExpanded &&
+            selectedIngredients.length > 0 && (
+              <View style={styles.ingredientsWrap}>
+                {selectedIngredients.map((ingredient) => (
+                  <IngredientChip
+                    key={ingredient.id}
+                    ingredient={ingredient}
+                    selected={true}
+                    onPress={() => handleIngredientToggle(ingredient.id)}
+                  />
+                ))}
+              </View>
+            )}
+
+          {!isIngredientsLoading &&
+            !isIngredientsError &&
+            filterIngredients.length > 0 &&
+            !isFiltersExpanded &&
+            selectedIngredients.length === 0 && (
+              <Text style={styles.emptyText}>Rozwiń sekcję, aby wybrać składniki.</Text>
+            )}
+
+          {!isIngredientsLoading &&
+            !isIngredientsError &&
+            filterIngredients.length > 0 &&
+            isFiltersExpanded && (
+              <>
+                <View style={styles.ingredientsWrap}>
+                  {visibleIngredients.map((ingredient) => (
+                    <IngredientChip
+                      key={ingredient.id}
+                      ingredient={ingredient}
+                      selected={selectedIngredientIds.includes(ingredient.id)}
+                      onPress={() => handleIngredientToggle(ingredient.id)}
+                    />
+                  ))}
+                </View>
+
+                {filterIngredients.length > INITIAL_VISIBLE_INGREDIENTS && (
+                  <TouchableOpacity
+                    style={styles.showMoreButton}
+                    onPress={() => setShowAllIngredients((current) => !current)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.showMoreText}>
+                      {showAllIngredients ? 'Pokaż mniej' : 'Pokaż więcej'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Popularne przepisy</Text>
           {showRefreshedText && <Text style={styles.refreshedText}>Odświeżono</Text>}
           {isLoading && <Text style={styles.emptyText}>Ładowanie przepisów...</Text>}
           {isError && <Text style={styles.emptyText}>Nie udało się pobrać przepisów.</Text>}
-          {!isLoading && !isError && recipes.length === 0 && (
+          {!isLoading && !isError && filteredRecipes.length === 0 && (
             <Text style={styles.emptyText}>Brak przepisów w bazie.</Text>
           )}
           {!isLoading &&
             !isError &&
-            recipes.map((recipe) => (
+            filteredRecipes.map((recipe) => (
               <RecipeCard
                 key={recipe.id}
                 recipe={recipe}
