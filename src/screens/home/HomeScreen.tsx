@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#dc2626',
+    color: '#357522',
     marginBottom: 16,
   },
   filterHeader: {

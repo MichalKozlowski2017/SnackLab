@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
 import { supabase } from '../../services/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -75,14 +76,17 @@ export default function AuthScreen() {
     setErrorMessage(null);
 
     try {
+      const appOwnership = Constants.appOwnership ?? 'unknown';
+
+      if (appOwnership === 'expo') {
+        throw new Error('Logowanie Google działa w development build (nie w Expo Go).');
+      }
+
       const redirectTo = Linking.createURL('auth/callback', { scheme: 'snacklab' });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo,
-          skipBrowserRedirect: true,
-        },
+        options: { redirectTo, skipBrowserRedirect: true },
       });
 
       if (error) {
@@ -96,8 +100,7 @@ export default function AuthScreen() {
       const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
       if (authResult.type !== 'success' || !authResult.url) {
-        setIsLoading(false);
-        return;
+        throw new Error('Logowanie zostało przerwane.');
       }
 
       const { accessToken, refreshToken, errorDescription } = parseAuthUrl(authResult.url);
