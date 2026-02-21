@@ -138,6 +138,53 @@ export function useIngredients() {
   });
 }
 
+// Fetch current user's favorite recipes
+export function useFavorites() {
+  return useQuery({
+    queryKey: ['currentUserFavorites'],
+    queryFn: async () => {
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) return [];
+
+      // Fetch favorite recipe IDs
+      const { data: favoritesList, error: favError } = await supabase
+        .from('favorites')
+        .select('recipe_id')
+        .eq('user_id', user.id);
+
+      if (favError) throw favError;
+
+      const recipeIds = favoritesList?.map((fav) => fav.recipe_id) || [];
+
+      if (recipeIds.length === 0) return [];
+
+      // Fetch full recipes for favorited IDs
+      const { data: recipesData, error: recipesError } = await supabase
+        .from('recipes')
+        .select(
+          `
+          *,
+          recipe_ingredients (
+            ingredient_id,
+            quantity,
+            unit,
+            ingredients (*)
+          )
+        `
+        )
+        .in('id', recipeIds);
+
+      if (recipesError) throw recipesError;
+
+      return (recipesData as RecipeRow[]).map(mapRecipeRowToRecipe);
+    },
+  });
+}
+
 // Create recipe mutation
 export function useCreateRecipe() {
   const queryClient = useQueryClient();
@@ -207,35 +254,24 @@ export function useToggleFavorite() {
       if (!user) throw new Error('User not authenticated');
 
       if (isFavorite) {
-        // Remove from favorites
         const { error } = await supabase
           .from('favorites')
           .delete()
           .eq('user_id', user.id)
           .eq('recipe_id', recipeId);
-
         if (error) throw error;
       } else {
-        // Add to favorites
         const { error } = await supabase.from('favorites').insert({
           user_id: user.id,
           recipe_id: recipeId,
         });
-
         if (error) throw error;
       }
 
       return { recipeId, isFavorite: !isFavorite };
     },
-    onSuccess: async () => {
-      // Invalidate favorites query
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.favorites(user.id) });
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentUserFavorites'] });
     },
   });
 }

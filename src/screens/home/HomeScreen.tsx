@@ -3,7 +3,12 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } 
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
-import { useIngredients, useRecipes } from '../../hooks/useRecipes';
+import {
+  useIngredients,
+  useRecipes,
+  useFavorites,
+  useToggleFavorite,
+} from '../../hooks/useRecipes';
 import RecipeCard from '../../components/recipe/RecipeCard';
 import IngredientChip from '../../components/ingredient/IngredientChip';
 
@@ -126,11 +131,17 @@ export default function HomeScreen() {
     isLoading: isIngredientsLoading,
     isError: isIngredientsError,
   } = useIngredients();
+  const { data: favoriteRecipes = [] } = useFavorites();
+  const { mutateAsync: toggleFavorite } = useToggleFavorite();
   const [selectedIngredientIds, setSelectedIngredientIds] = useState<string[]>([]);
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [showAllIngredients, setShowAllIngredients] = useState(false);
   const [showRefreshedText, setShowRefreshedText] = useState(false);
   const hideRefreshedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const favoriteRecipeIds = useMemo(() => {
+    return new Set(favoriteRecipes.map((recipe) => recipe.id));
+  }, [favoriteRecipes]);
 
   const usedIngredientIds = useMemo(() => {
     const ids = new Set<string>();
@@ -351,6 +362,13 @@ export default function HomeScreen() {
                 key={recipe.id}
                 recipe={recipe}
                 onPress={() => navigation.navigate('RecipeDetail', { recipeId: recipe.id })}
+                isFavorite={favoriteRecipeIds.has(recipe.id)}
+                onToggleFavorite={async () => {
+                  await toggleFavorite({
+                    recipeId: recipe.id,
+                    isFavorite: favoriteRecipeIds.has(recipe.id),
+                  });
+                }}
               />
             ))}
         </View>

@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
-import { useRecipe } from '../../hooks/useRecipes';
+import { useRecipe, useFavorites, useToggleFavorite } from '../../hooks/useRecipes';
 import { formatDifficulty, formatPrepTime } from '../../utils';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RecipeDetail'>;
@@ -15,10 +15,33 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  favoriteButton: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  favoriteIcon: {
+    fontSize: 28,
+    color: '#d1d5db',
+  },
+  favoriteIconActive: {
+    fontSize: 28,
+    color: '#f79f17',
   },
   idText: {
     color: '#6b7280',
@@ -57,6 +80,28 @@ const styles = StyleSheet.create({
 export default function RecipeDetailScreen({ route }: Props) {
   const { recipeId } = route.params;
   const { data: recipe, isLoading, isError } = useRecipe(recipeId);
+  const { data: favoriteRecipes = [] } = useFavorites();
+  const { mutateAsync: toggleFavorite } = useToggleFavorite();
+
+  const serverIsFavorite = useMemo(() => {
+    return favoriteRecipes.some((r) => r.id === recipeId);
+  }, [favoriteRecipes, recipeId]);
+
+  const [optimisticFavorite, setOptimisticFavorite] = useState(serverIsFavorite);
+
+  useEffect(() => {
+    setOptimisticFavorite(serverIsFavorite);
+  }, [serverIsFavorite]);
+
+  const handleToggleFavorite = async () => {
+    const prev = optimisticFavorite;
+    setOptimisticFavorite(!prev);
+    try {
+      await toggleFavorite({ recipeId, isFavorite: prev });
+    } catch {
+      setOptimisticFavorite(prev);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -83,7 +128,20 @@ export default function RecipeDetailScreen({ route }: Props) {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>{recipe.title}</Text>
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>{recipe.title}</Text>
+          </View>
+          <Pressable
+            style={styles.favoriteButton}
+            onPress={handleToggleFavorite}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={optimisticFavorite ? styles.favoriteIconActive : styles.favoriteIcon}>
+              ♥
+            </Text>
+          </Pressable>
+        </View>
         <Text style={styles.idText}>ID: {recipeId}</Text>
         {!!recipe.description && <Text style={styles.description}>{recipe.description}</Text>}
 

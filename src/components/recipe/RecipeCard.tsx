@@ -1,14 +1,38 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Image, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
 import { Recipe } from '../../types';
 import { formatPrepTime, formatDifficulty } from '../../utils';
 
 interface RecipeCardProps {
   recipe: Recipe;
   onPress: () => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => Promise<void>;
 }
 
-export default function RecipeCard({ recipe, onPress }: RecipeCardProps) {
+export default function RecipeCard({
+  recipe,
+  onPress,
+  isFavorite = false,
+  onToggleFavorite,
+}: RecipeCardProps) {
+  // Optimistic local state - flips immediately on press, then syncs with server
+  const [optimisticFavorite, setOptimisticFavorite] = useState(isFavorite);
+
+  useEffect(() => {
+    setOptimisticFavorite(isFavorite);
+  }, [isFavorite]);
+
+  const handleToggleFavorite = async () => {
+    if (!onToggleFavorite) return;
+    const prev = optimisticFavorite;
+    setOptimisticFavorite(!prev); // instant visual feedback
+    try {
+      await onToggleFavorite();
+    } catch {
+      setOptimisticFavorite(prev); // revert on error
+    }
+  };
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       {recipe.imageUrl ? (
@@ -24,11 +48,25 @@ export default function RecipeCard({ recipe, onPress }: RecipeCardProps) {
           <Text style={styles.title} numberOfLines={2}>
             {recipe.title}
           </Text>
-          {recipe.isAiGenerated && (
-            <View style={styles.aiBadge}>
-              <Text style={styles.aiBadgeText}>🤖 AI</Text>
-            </View>
-          )}
+          <View style={styles.badgesRow}>
+            {onToggleFavorite && (
+              // Pressable prevents ScrollView from stealing the gesture
+              <Pressable
+                style={styles.favoriteButton}
+                onPress={handleToggleFavorite}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={optimisticFavorite ? styles.favoriteIconActive : styles.favoriteIcon}>
+                  ♥
+                </Text>
+              </Pressable>
+            )}
+            {recipe.isAiGenerated && (
+              <View style={styles.aiBadge}>
+                <Text style={styles.aiBadgeText}>🤖 AI</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {recipe.description && (
@@ -86,6 +124,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  favoriteButton: {
+    padding: 4,
+  },
+  favoriteIcon: {
+    fontSize: 22,
+    color: '#d1d5db',
+  },
+  favoriteIconActive: {
+    fontSize: 22,
+    color: '#f79f17',
   },
   title: {
     flex: 1,
